@@ -194,7 +194,23 @@ ask_menu "Start on Proxmox boot:" ONBOOT_MODE "1" \
 [[ "$ONBOOT_MODE" == "Yes"* ]] && ONBOOT=1 || ONBOOT=0
 
 # ── Template ──────────────────────────────────────────────────────────────
-TEMPLATE="debian-12-standard_12.7-1_amd64.tar.zst"
+# Check if any debian-12 template is already cached locally
+TEMPLATE=$(ls /var/lib/vz/template/cache/debian-12-standard_*.tar.zst 2>/dev/null \
+  | sort -V | tail -1 | xargs -r basename)
+
+# If not cached, find latest available from Proxmox repo
+if [[ -z "$TEMPLATE" ]]; then
+  msg_info "Checking available Debian 12 templates"
+  pveam update &>/dev/null
+  TEMPLATE=$(pveam available --section system 2>/dev/null \
+    | awk '/debian-12-standard/{print $2}' \
+    | sort -V | tail -1)
+  msg_ok "Found template: $TEMPLATE"
+fi
+
+if [[ -z "$TEMPLATE" ]]; then
+  msg_error "Could not find a Debian 12 template. Run 'pveam update' and try again."
+fi
 
 # ── Summary ───────────────────────────────────────────────────────────────
 echo ""
@@ -221,12 +237,11 @@ read -r -p "  Proceed with installation? [y/N] " YN
 # ── Template ──────────────────────────────────────────────────────────────
 TPATH="/var/lib/vz/template/cache/${TEMPLATE}"
 if [[ ! -f "$TPATH" ]]; then
-  msg_info "Downloading Debian 12 template"
-  pveam update &>/dev/null
-  pveam download local "$TEMPLATE" &>/dev/null || msg_error "Template download failed"
-  msg_ok "Downloaded Debian 12 template"
+  msg_info "Downloading template: $TEMPLATE"
+  pveam download local "$TEMPLATE" &>/dev/null || msg_error "Template download failed — run 'pveam update' on your host and try again"
+  msg_ok "Downloaded $TEMPLATE"
 else
-  msg_ok "Debian 12 template already present"
+  msg_ok "Template already cached: $TEMPLATE"
 fi
 
 # ── Create LXC ────────────────────────────────────────────────────────────
