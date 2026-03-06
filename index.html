@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>Buzzball.Live — SU Hornets Baseball</title>
+  <title>BuzzyBaseball — SU Hornets</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -18,7 +18,7 @@
     const { useState, useEffect, useRef } = React;
 
 const NAVY = "#00205C";
-const PROXY_URL = "https://buzzball.mitch-374.workers.dev";
+const PROXY_URL = "https://buzzybaseball.mitch-374.workers.dev";
 const RED = "#D5002B";
 const CHALK = "#e8ecf5";
 
@@ -166,6 +166,7 @@ function randomGame() {
     strikes: Math.floor(Math.random() * 3),
     outs: Math.floor(Math.random() * 3),
     runners: runners,
+    oppRunners: randomRunners(pitcherPool),
     batter: batter,
     pitcher: pitcher,
     pitches: Math.floor(Math.random() * 60) + 20,
@@ -174,6 +175,7 @@ function randomGame() {
 
 function Field(props) {
   const runners = props.runners || [null, null, null];
+  const oppRunners = props.oppRunners || [null, null, null];
 
   // Base positions measured via pixel detection on actual image
   // 2nd base: (50.0%, 55.4%)  1st base: (66.8%, 73.8%)  3rd base: (32.9%, 74.0%)
@@ -233,7 +235,49 @@ function Field(props) {
             )}
           </div>
         );
-      })}
+      })
+
+      {/* Opponent runner markers — shown as red diamonds */}
+      {[
+        { px:"66.8%", py:"73.8%", runner: oppRunners[0] },
+        { px:"50.0%", py:"55.4%", runner: oppRunners[1] },
+        { px:"32.9%", py:"74.0%", runner: oppRunners[2] },
+      ].map(function(b, i) {
+        const on = !!b.runner && typeof b.runner === "object";
+        if (!on) return null;
+        return (
+          <div key={"opp"+i} style={{
+            position:"absolute",
+            left: b.px,
+            top: b.py,
+            transform: "translate(-50%, -50%)",
+            pointerEvents:"none",
+            zIndex: 11,
+          }}>
+            <div style={{
+              width: 22, height: 22,
+              background: RED,
+              border: "2px solid rgba(255,255,255,0.8)",
+              borderRadius: 3,
+              transform: "rotate(45deg)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
+              <div style={{
+                transform: "rotate(-45deg)",
+                fontSize: 7,
+                fontWeight: 700,
+                color: "white",
+                fontFamily: "monospace",
+                letterSpacing: 0,
+                textAlign: "center",
+                lineHeight: 1,
+              }}>{b.runner.short || "R"}</div>
+            </div>
+          </div>
+        );
+      })}}
     </div>
   );
 }
@@ -453,7 +497,7 @@ function Countdown(props) {
   );
 }
 
-function BuzzBall() {
+function BuzzyBaseball() {
   useEffect(function() {
     var meta = document.querySelector("meta[name=viewport]");
     if (!meta) { meta = document.createElement("meta"); meta.name = "viewport"; document.head.appendChild(meta); }
@@ -584,6 +628,7 @@ function BuzzBall() {
           inning: prev.inning, half: prev.half,
           balls: prev.balls, strikes: prev.strikes, outs: prev.outs,
           runners: prev.runners ? prev.runners.slice() : [null, null, null],
+          oppRunners: prev.oppRunners ? prev.oppRunners.slice() : [null, null, null],
           batter: prev.batter, pitcher: prev.pitcher, pitches: prev.pitches,
           live: prev.live,
         };
@@ -601,6 +646,8 @@ function BuzzBall() {
         var battingPool = next.half === "top" ? OPP_BATTERS : HORNETS_BATTERS;
         var pitchPool   = next.half === "top" ? HORNETS_PITCHERS : OPP_PITCHERS;
         next.runners = randomRunners(battingPool);
+        var oppBattingPool = next.half === "top" ? OPP_BATTERS : HORNETS_BATTERS;
+        next.oppRunners = randomRunners(oppBattingPool);
         next.batter  = pick(battingPool) || prev.batter;
         next.pitcher = pick(pitchPool)   || prev.pitcher;
         next.pitches = next.pitches + Math.floor(Math.random() * 3) + 1;
@@ -683,7 +730,7 @@ function BuzzBall() {
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ fontSize:24 }}>⚾</div>
           <div>
-            <div style={{ fontSize:16, fontWeight:700, letterSpacing:1 }}>Buzzball.<span style={{ color:RED }}>Live</span></div>
+            <div style={{ fontSize:16, fontWeight:700, letterSpacing:1 }}>BuzzyBaseball.<span style={{ color:RED }}>Live</span></div>
           </div>
           {liveGame && (
             <div style={{ marginLeft:"auto", background: liveGame && liveGame.live ? "#00aa44" : RED, borderRadius:4, padding:"3px 8px", fontSize:9, letterSpacing:2, fontFamily:"monospace" }}>{liveGame && liveGame.live ? "LIVE" : "SIM"}</div>
@@ -710,7 +757,7 @@ function BuzzBall() {
 
       {tab === "home" && (
         <div>
-          {liveGame ? <Field runners={liveGame.runners} /> : <Field runners={[null,null,null]} />}
+          {liveGame ? <Field runners={liveGame.runners} oppRunners={liveGame.oppRunners} /> : <Field runners={[null,null,null]} oppRunners={[null,null,null]} />}
           {liveGame ? <Scoreboard game={liveGame} /> : <Countdown nextGame={nextGame} />}
           <div style={{ padding:"16px" }}>
             {!liveGame ? (
@@ -922,7 +969,7 @@ function BuzzBall() {
 }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<BuzzBall />);
+    root.render(<BuzzyBaseball />);
   </script>
 </body>
 </html>
