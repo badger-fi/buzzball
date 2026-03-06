@@ -70,24 +70,43 @@ ask "Root password" "buzzball" PASSWORD
 # ── Storage ───────────────────────────────────────────────────────────────
 echo ""
 echo -e "  ${BL}Available storage pools:${CL}"
-mapfile -t STORAGE_LIST < <(pvesm status --content rootdir 2>/dev/null | awk 'NR>1 && $2=="active" {print $1}')
+
+# Collect all active storage pools with their type
+declare -a STORAGE_LIST
+declare -a STORAGE_TYPE_LIST
+while IFS= read -r line; do
+  name=$(echo "$line" | awk '{print $1}')
+  type=$(echo "$line" | awk '{print $2}')
+  status=$(echo "$line" | awk '{print $3}')
+  [[ "$status" == "active" ]] || continue
+  STORAGE_LIST+=("$name")
+  STORAGE_TYPE_LIST+=("$type")
+done < <(pvesm status 2>/dev/null | awk 'NR>1')
+
 if [[ ${#STORAGE_LIST[@]} -eq 0 ]]; then
   STORAGE_LIST=("local-lvm" "local")
+  STORAGE_TYPE_LIST=("lvm-thin" "dir")
 fi
 
-# Determine recommended storage
+# Determine recommended storage (prefer local-lvm, then zfs, then first active)
 REC_STORAGE=1
 for i in "${!STORAGE_LIST[@]}"; do
   if [[ "${STORAGE_LIST[$i]}" == "local-lvm" ]]; then
-    REC_STORAGE=$((i+1))
-    break
+    REC_STORAGE=$((i+1)); break
   fi
 done
+if [[ $REC_STORAGE -eq 1 ]]; then
+  for i in "${!STORAGE_LIST[@]}"; do
+    if [[ "${STORAGE_TYPE_LIST[$i]}" == "zfspool" ]]; then
+      REC_STORAGE=$((i+1)); break
+    fi
+  done
+fi
 
 for i in "${!STORAGE_LIST[@]}"; do
-  local_tag=""
-  [[ "$((i+1))" == "$REC_STORAGE" ]] && local_tag="  ${GN}← recommended${CL}"
-  echo -e "    ${YW}$((i+1))${CL}) ${STORAGE_LIST[$i]}${local_tag}"
+  rec_tag=""
+  [[ "$((i+1))" == "$REC_STORAGE" ]] && rec_tag="  ${GN}← recommended${CL}"
+  echo -e "    ${YW}$((i+1))${CL}) ${BOLD}${STORAGE_LIST[$i]}${CL}  ${DIM}(${STORAGE_TYPE_LIST[$i]})${CL}${rec_tag}"
 done
 echo -ne "  Choice [${BOLD}${REC_STORAGE}${CL}] (or type a name): "
 read -r STORAGE_INPUT
