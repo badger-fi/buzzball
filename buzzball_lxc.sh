@@ -8,7 +8,7 @@
 #  Run on your Proxmox host:
 #    bash buzzball_lxc.sh
 # =============================================================================
-set -euo pipefail
+set -uo pipefail
 
 YW="\033[33m"; BL="\033[36m"; RD="\033[01;31m"; GN="\033[1;92m"; CL="\033[m"; BOLD="\033[1m"; DIM="\033[2m"
 BFR="\\r\\033[K"; HOLD="  "; CM="  ✅"; CROSS="  ❌"
@@ -185,13 +185,13 @@ echo ""
 ask_menu "Container type:" PRIV_MODE "1" \
   "Unprivileged (recommended — more secure)" \
   "Privileged (full host access)"
-[[ "$PRIV_MODE" == "Unprivileged"* ]] && UNPRIVILEGED=1 || UNPRIVILEGED=0
+if [[ "$PRIV_MODE" == "Unprivileged"* ]]; then UNPRIVILEGED=1; else UNPRIVILEGED=0; fi
 
 # ── Auto-start on boot ─────────────────────────────────────────────────────
 ask_menu "Start on Proxmox boot:" ONBOOT_MODE "1" \
   "Yes (recommended)" \
   "No"
-[[ "$ONBOOT_MODE" == "Yes"* ]] && ONBOOT=1 || ONBOOT=0
+if [[ "$ONBOOT_MODE" == "Yes"* ]]; then ONBOOT=1; else ONBOOT=0; fi
 
 # ── Template ──────────────────────────────────────────────────────────────
 # Check if any debian-12 template is already cached locally
@@ -225,8 +225,10 @@ printf "  ${BL}│${CL}  %-18s ${BOLD}%-22s${CL}${BL}│${CL}\n" "Memory:"      
 printf "  ${BL}│${CL}  %-18s ${BOLD}%-22s${CL}${BL}│${CL}\n" "CPU Cores:"     "$CORES"
 printf "  ${BL}│${CL}  %-18s ${BOLD}%-22s${CL}${BL}│${CL}\n" "Bridge:"        "$BRIDGE"
 printf "  ${BL}│${CL}  %-18s ${BOLD}%-22s${CL}${BL}│${CL}\n" "Network:"       "$NET_CONFIG"
-printf "  ${BL}│${CL}  %-18s ${BOLD}%-22s${CL}${BL}│${CL}\n" "Type:"          "$([ $UNPRIVILEGED -eq 1 ] && echo Unprivileged || echo Privileged)"
-printf "  ${BL}│${CL}  %-18s ${BOLD}%-22s${CL}${BL}│${CL}\n" "Start on boot:" "$([ $ONBOOT -eq 1 ] && echo Yes || echo No)"
+PRIV_LABEL="Privileged"; [[ $UNPRIVILEGED -eq 1 ]] && PRIV_LABEL="Unprivileged" || true
+BOOT_LABEL="No";         [[ $ONBOOT -eq 1 ]]      && BOOT_LABEL="Yes"           || true
+printf "  ${BL}│${CL}  %-18s ${BOLD}%-22s${CL}${BL}│${CL}\n" "Type:"          "$PRIV_LABEL"
+printf "  ${BL}│${CL}  %-18s ${BOLD}%-22s${CL}${BL}│${CL}\n" "Start on boot:" "$BOOT_LABEL"
 echo -e "  ${BL}${BOLD}└──────────────────────────────────────────┘${CL}"
 echo ""
 echo -e "  ${DIM}Tip: just mash Enter through all prompts to use all recommended settings.${CL}"
@@ -253,8 +255,8 @@ pct create "$CTID" "$TPATH" \
   --net0 "name=eth0,bridge=${BRIDGE},${NET_CONFIG}" \
   ${DNS_CONFIG} \
   --unprivileged "$UNPRIVILEGED" --features nesting=1 \
-  --onboot "$ONBOOT" --start 0 &>/dev/null \
-  || msg_error "Failed to create container"
+  --onboot "$ONBOOT" --start 0 &>/dev/null
+if [[ $? -ne 0 ]]; then msg_error "Failed to create container"; fi
 msg_ok "Created container ${CTID}"
 
 msg_info "Starting container"
@@ -328,7 +330,7 @@ msg_ok "Management tools installed"
 
 # ── Done ──────────────────────────────────────────────────────────────────
 IP=$(pct exec "$CTID" -- hostname -I 2>/dev/null | awk '{print $1}')
-[[ -z "$IP" ]] && IP="${STATIC_IP%%/*}" 2>/dev/null || true
+if [[ -z "$IP" ]] && [[ -n "${STATIC_IP:-}" ]]; then IP="${STATIC_IP%%/*}"; fi
 
 echo ""
 echo -e "${GN}${BOLD}"
